@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: PlmBackend
+
+  datasource:
+      url: ${PLM_DB_URL:jdbc:postgresql://localhost:5432/plm_backend_db}
+      username: ${PLM_DB_USERNAME:postgres}
+      password: ${PLM_DB_PASSWORD:postgres}
+      driver-class-name: org.postgresql.Driver
+
+      hikari:
+        minimumIdle: 2
+        maximumPoolSize: 50
+        connectionTimeout: 900000
+        idleTimeout: 600000
+        maxLifetime: 1800000
+        leakDetectionThreshold: 900000   
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+plm:
+  auth:
+    jwt-secret: ${PLM_JWT_SECRET:}
+    token-validity-minutes: 60
+    allowed-origin: ${PLM_ALLOWED_ORIGIN:http://localhost:4200}
+    bootstrap:
+      email: ${PLM_BOOTSTRAP_ADMIN_EMAIL:anil.p@nextfirst.com}
+      password: ${PLM_BOOTSTRAP_ADMIN_PASSWORD:test123456789}
+      full-name: ${PLM_BOOTSTRAP_ADMIN_NAME:PLM Administrator}
