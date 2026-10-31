@@ -22,6 +22,8 @@ spring:
       ddl-auto: update
 
 plm:
+  design-files:
+    allowed-roots: ${PLM_DESIGN_FILES_ALLOWED_ROOTS:}
   auth:
     jwt-secret: ${PLM_JWT_SECRET:}
     token-validity-minutes: 60

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.nextfirst.plm.project.exception.DuplicateProjectNumberException;
 import com.nextfirst.plm.project.exception.ProjectNotFoundException;
 import com.nextfirst.plm.auth.exception.AuthResourceNotFoundException;
+import com.nextfirst.plm.design.service.DesignFileStorageNotConfiguredException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -27,6 +28,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AuthResourceNotFoundException.class)
     public ProblemDetail handleAuthResourceNotFound(AuthResourceNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(DesignFileStorageNotConfiguredException.class)
+    public ProblemDetail handleDesignFileStorageNotConfigured(DesignFileStorageNotConfiguredException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
     }
 
     @ExceptionHandler(AuthenticationException.class)

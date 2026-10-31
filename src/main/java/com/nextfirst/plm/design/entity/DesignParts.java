@@ -9,6 +9,8 @@ import org.hibernate.annotations.OnDeleteAction;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -59,6 +61,14 @@ public class DesignParts {
     @Column(length = 100)
     private String make;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode_of_purchase", length = 20)
+    private ModeOfPurchase modeOfPurchase;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "part_status", length = 30)
+    private PartStatus partStatus;
+
     @Column(name = "created_by", nullable = false, length = 254)
     private String createdBy;
 
@@ -77,6 +87,12 @@ public class DesignParts {
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
+        if (modeOfPurchase == null) {
+            modeOfPurchase = ModeOfPurchase.PURCHASE;
+        }
+        if (partStatus == null) {
+            partStatus = PartStatus.NOT_STARTED;
+        }
     }
 
     public Long getId() { return id; }
@@ -94,6 +110,10 @@ public class DesignParts {
     public void setDescription(String description) { this.description = description; }
     public String getMake() { return make; }
     public void setMake(String make) { this.make = make; }
+    public ModeOfPurchase getModeOfPurchase() { return modeOfPurchase; }
+    public void setModeOfPurchase(ModeOfPurchase modeOfPurchase) { this.modeOfPurchase = modeOfPurchase; }
+    public PartStatus getPartStatus() { return partStatus; }
+    public void setPartStatus(PartStatus partStatus) { this.partStatus = partStatus; }
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     public String getFilePath() { return filePath; }

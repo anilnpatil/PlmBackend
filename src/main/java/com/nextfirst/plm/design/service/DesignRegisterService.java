@@ -12,6 +12,7 @@ import com.nextfirst.plm.auth.service.AuthAuditService;
 import com.nextfirst.plm.auth.service.AuthorizationService;
 import com.nextfirst.plm.design.dto.DesignMainAssemblyRequest;
 import com.nextfirst.plm.design.dto.DesignMainAssemblyResponse;
+import com.nextfirst.plm.design.dto.DesignPartStatusRequest;
 import com.nextfirst.plm.design.dto.DesignPartsRequest;
 import com.nextfirst.plm.design.dto.DesignPartsResponse;
 import com.nextfirst.plm.design.dto.DesignPermissions;
@@ -21,6 +22,8 @@ import com.nextfirst.plm.design.dto.DesignWorkspaceResponse;
 import com.nextfirst.plm.design.entity.DesignMainAssembly;
 import com.nextfirst.plm.design.entity.DesignParts;
 import com.nextfirst.plm.design.entity.DesignSubAssembly;
+import com.nextfirst.plm.design.entity.ModeOfPurchase;
+import com.nextfirst.plm.design.entity.PartStatus;
 import com.nextfirst.plm.design.exception.DesignResourceNotFoundException;
 import com.nextfirst.plm.design.repository.DesignMainAssemblyRepository;
 import com.nextfirst.plm.design.repository.DesignPartsRepository;
@@ -66,7 +69,8 @@ public class DesignRegisterService {
         return new DesignWorkspaceResponse(mainAssemblies, new DesignPermissions(
                 hasPermission(authentication, projectId, "ASSEMBLY_CREATE"),
                 hasPermission(authentication, projectId, "PARTS_CREATE"),
-                canReadParts));
+                canReadParts,
+                hasPermission(authentication, projectId, "PARTS_UPDATE")));
     }
 
     @Transactional
@@ -158,12 +162,35 @@ public class DesignRegisterService {
         part.setQuantity(request.quantity());
         part.setDescription(blankToNull(request.description()));
         part.setMake(blankToNull(request.make()));
+        part.setModeOfPurchase(request.modeOfPurchase() == null
+                ? ModeOfPurchase.PURCHASE
+                : request.modeOfPurchase());
+        part.setPartStatus(request.partStatus() == null
+                ? PartStatus.NOT_STARTED
+                : request.partStatus());
         part.setFilePath(blankToNull(request.filePath()));
         part.setStartDate(request.startDate());
         part.setCompletedDate(request.completedDate());
         part.setCreatedBy(authentication.getName());
         part = partsRepository.save(part);
         auditService.record("DESIGN_PART_CREATED", "DESIGN_PART", part.getId(), part.getPartNumber());
+        return partResponse(part);
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
+    public DesignPartsResponse updatePartStatus(
+            @P("projectId") Long projectId,
+            Long partId,
+            DesignPartStatusRequest request,
+            Authentication authentication) {
+        DesignParts part = partsRepository.findByIdAndMainAssemblyProjectId(partId, projectId)
+                .orElseThrow(() -> new DesignResourceNotFoundException("Part", partId));
+        PartStatus previousStatus = part.getPartStatus();
+        part.setPartStatus(request.partStatus());
+        part = partsRepository.save(part);
+        auditService.record("DESIGN_PART_STATUS_UPDATED", "DESIGN_PART", part.getId(),
+                previousStatus + " -> " + part.getPartStatus());
         return partResponse(part);
     }
 
@@ -217,6 +244,8 @@ public class DesignRegisterService {
                 part.getQuantity(),
                 part.getDescription(),
                 part.getMake(),
+                part.getModeOfPurchase() == null ? ModeOfPurchase.PURCHASE : part.getModeOfPurchase(),
+                part.getPartStatus() == null ? PartStatus.NOT_STARTED : part.getPartStatus(),
                 part.getCreatedBy(),
                 part.getFilePath(),
                 part.getStartDate(),
@@ -241,6 +270,12 @@ public class DesignRegisterService {
     }
 
     private boolean hasPermission(Authentication authentication, Long projectId, String permission) {
+        if ("PARTS_READ".equals(permission)) {
+            return authorizationService.hasProjectPermission(
+                    authentication, projectId, "PARTS_READ", DESIGN_AREA)
+                    || authorizationService.hasProjectPermission(
+                            authentication, projectId, "PARTS_UPDATE", DESIGN_AREA);
+        }
         return authorizationService.hasProjectPermission(authentication, projectId, permission, DESIGN_AREA);
     }
 

@@ -3,6 +3,8 @@ package com.nextfirst.plm.design.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import com.nextfirst.plm.design.entity.ModeOfPurchase;
+import com.nextfirst.plm.design.entity.PartStatus;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
@@ -18,5 +20,7 @@ public record DesignPartsRequest(
         @Size(max = 100) String make,
         @Size(max = 2048) String filePath,
         LocalDate startDate,
-        LocalDate completedDate) {
+        LocalDate completedDate,
+        ModeOfPurchase modeOfPurchase,
+        PartStatus partStatus) {
 }

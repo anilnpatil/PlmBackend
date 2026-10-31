@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.nextfirst.plm.design.entity.DesignParts;
 
 public interface DesignPartsRepository extends JpaRepository<DesignParts, Long> {
+    Optional<DesignParts> findByIdAndMainAssemblyProjectId(Long id, Long projectId);
     List<DesignParts> findByMainAssemblyIdOrderByPartNumber(Long mainAssemblyId);
     List<DesignParts> findBySubAssemblyIdOrderByPartNumber(Long subAssemblyId);
     boolean existsByMainAssemblyIdAndSubAssemblyIsNullAndPartNumberIgnoreCase(
