@@ -15,7 +15,7 @@ public record DesignPartsRequest(
         Long subAssemblyId,
         @NotBlank @Size(max = 50) String partNumber,
         @NotBlank @Size(max = 120) String partName,
-        @NotNull @DecimalMin(value = "0.001") BigDecimal quantity,
+        @NotNull @DecimalMin(value = "1") BigDecimal quantity,
         @Size(max = 2000) String description,
         @Size(max = 100) String make,
         @Size(max = 2048) String filePath,

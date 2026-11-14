@@ -19,7 +19,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.nextfirst.plm.auth.entity.AuthPermission;
 import com.nextfirst.plm.auth.entity.AuthRole;
 import com.nextfirst.plm.auth.entity.AuthUser;
+import com.nextfirst.plm.auth.entity.AreaAccessLevel;
 import com.nextfirst.plm.auth.entity.FunctionalArea;
+import com.nextfirst.plm.auth.entity.ProjectAreaAccess;
 import com.nextfirst.plm.auth.entity.ProjectAssignment;
 import com.nextfirst.plm.auth.repository.AuthUserRepository;
 import com.nextfirst.plm.auth.repository.ProjectAssignmentRepository;
@@ -76,6 +78,83 @@ class AuthorizationServiceTest {
         when(assignmentRepository.countByUserIdAndPermissionCode(14L, "PROJECT_READ")).thenReturn(1L);
 
         assertTrue(authorizationService.hasAnyProjectPermission(authentication, "PROJECT_READ"));
+    }
+
+    @Test
+    void enforcesReadOnlyAndReadWriteAccessIndependentlyByArea() {
+        ProjectAssignment assignment = new ProjectAssignment();
+        assignment.setUser(user);
+        addAreaGrant(assignment, "PURCHASE", AreaAccessLevel.READ_ONLY);
+        addAreaGrant(assignment, "DESIGN", AreaAccessLevel.READ_WRITE);
+        when(assignmentRepository.findByProjectIdAndUserId(61L, 14L)).thenReturn(Optional.of(assignment));
+
+        assertTrue(authorizationService.hasProjectPermission(
+                authentication, 61L, "PURCHASE_COMPONENTS_READ", "PURCHASE"));
+        assertFalse(authorizationService.hasProjectPermission(
+                authentication, 61L, "PURCHASE_COMPONENTS_UPDATE", "PURCHASE"));
+        assertFalse(authorizationService.hasProjectPermission(
+                authentication, 61L, "MANUFACTURING_COMPONENTS_READ", "MANUFACTURING"));
+        assertTrue(authorizationService.hasProjectPermission(
+                authentication, 61L, "PARTS_UPDATE", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(
+                authentication, 61L, "PROJECT_READ", null));
+    }
+
+    @Test
+    void teamDesignAreaAccessGrantsTheExpectedDesignPermissions() {
+        ProjectAssignment readOnlyAssignment = new ProjectAssignment();
+        readOnlyAssignment.setUser(user);
+        addAreaGrant(readOnlyAssignment, "DESIGN", AreaAccessLevel.READ_ONLY);
+        when(assignmentRepository.findByProjectIdAndUserId(63L, 14L))
+                .thenReturn(Optional.of(readOnlyAssignment));
+
+        assertTrue(authorizationService.hasProjectPermission(authentication, 63L, "DESIGN_READ", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(authentication, 63L, "PARTS_READ", "DESIGN"));
+        assertFalse(authorizationService.hasProjectPermission(authentication, 63L, "PARTS_CREATE", "DESIGN"));
+        assertFalse(authorizationService.hasProjectPermission(authentication, 63L, "PARTS_UPDATE", "DESIGN"));
+
+        ProjectAssignment readWriteAssignment = new ProjectAssignment();
+        readWriteAssignment.setUser(user);
+        addAreaGrant(readWriteAssignment, "DESIGN", AreaAccessLevel.READ_WRITE);
+        when(assignmentRepository.findByProjectIdAndUserId(64L, 14L))
+                .thenReturn(Optional.of(readWriteAssignment));
+
+        assertTrue(authorizationService.hasProjectPermission(authentication, 64L, "DESIGN_READ", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(authentication, 64L, "PARTS_READ", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(authentication, 64L, "PARTS_CREATE", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(authentication, 64L, "PARTS_UPDATE", "DESIGN"));
+        assertTrue(authorizationService.hasProjectPermission(authentication, 64L, "ASSEMBLY_CREATE", "DESIGN"));
+    }
+
+    @Test
+    void areaAssignmentMakesProjectVisibleToScopedProjectSearch() {
+        when(assignmentRepository.countByUserIdWithAreaAccess(14L)).thenReturn(1L);
+
+        assertTrue(authorizationService.hasAnyProjectPermission(authentication, "PROJECT_READ"));
+    }
+
+    @Test
+    void legacyProjectReaderGetsReadOnlyAccessOnlyInAssignedAreas() {
+        ProjectAssignment assignment = new ProjectAssignment();
+        assignment.setUser(user);
+        assignment.getRoles().add(roleWithPermission("PROJECT_MANAGER", "PROJECT_READ"));
+        assignment.getFunctionalAreas().add(new FunctionalArea("PURCHASE", "Purchase"));
+        when(assignmentRepository.findByProjectIdAndUserId(62L, 14L)).thenReturn(Optional.of(assignment));
+
+        assertTrue(authorizationService.hasProjectPermission(
+                authentication, 62L, "PURCHASE_COMPONENTS_READ", "PURCHASE"));
+        assertFalse(authorizationService.hasProjectPermission(
+                authentication, 62L, "PURCHASE_COMPONENTS_UPDATE", "PURCHASE"));
+        assertFalse(authorizationService.hasProjectPermission(
+                authentication, 62L, "MANUFACTURING_COMPONENTS_READ", "MANUFACTURING"));
+    }
+
+    private void addAreaGrant(ProjectAssignment assignment, String code, AreaAccessLevel level) {
+        ProjectAreaAccess grant = new ProjectAreaAccess();
+        grant.setAssignment(assignment);
+        grant.setArea(new FunctionalArea(code, code));
+        grant.setAccessLevel(level);
+        assignment.getAreaAccessGrants().add(grant);
     }
 
     private AuthRole roleWithPermission(String code, String permissionCode) {

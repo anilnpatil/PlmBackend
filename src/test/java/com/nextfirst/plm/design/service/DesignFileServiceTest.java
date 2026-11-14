@@ -41,7 +41,7 @@ class DesignFileServiceTest {
         when(partsRepository.findByIdAndMainAssemblyProjectId(5L, 2L)).thenReturn(Optional.of(part));
         when(fileRootRepository.findByProjectIdOrderById(2L)).thenReturn(java.util.List.of(fileRoot(tempDir)));
 
-        DesignFileService service = service(tempDir);
+        DesignFileService service = service();
 
         assertEquals(file.toRealPath(), service.getPartFile(2L, 5L));
     }
@@ -55,7 +55,7 @@ class DesignFileServiceTest {
         when(partsRepository.findByIdAndMainAssemblyProjectId(5L, 2L)).thenReturn(Optional.of(part));
         when(fileRootRepository.findByProjectIdOrderById(2L)).thenReturn(java.util.List.of(fileRoot(allowedRoot)));
 
-        DesignFileService service = service(allowedRoot);
+        DesignFileService service = service();
 
         assertThrows(DesignResourceNotFoundException.class, () -> service.getPartFile(2L, 5L));
     }
@@ -66,7 +66,7 @@ class DesignFileServiceTest {
         Path file = Files.writeString(folder.resolve("10104 stand lock.pdf"), "design");
         DesignFileRoot root = fileRoot(tempDir);
         when(fileRootRepository.findByProjectIdOrderById(2L)).thenReturn(java.util.List.of(root));
-        DesignFileService service = service(tempDir);
+        DesignFileService service = service();
 
         var response = service.browse(2L, 12L, "subassembly");
 
@@ -81,7 +81,7 @@ class DesignFileServiceTest {
         Path allowedRoot = Files.createDirectory(tempDir.resolve("allowed"));
         DesignFileRoot root = fileRoot(allowedRoot);
         when(fileRootRepository.findByProjectIdOrderById(2L)).thenReturn(java.util.List.of(root));
-        DesignFileService service = service(allowedRoot);
+        DesignFileService service = service();
 
         assertThrows(IllegalArgumentException.class, () -> service.browse(2L, 12L, ".."));
     }
@@ -92,13 +92,13 @@ class DesignFileServiceTest {
         DesignParts part = new DesignParts();
         part.setFilePath(file.toString());
         when(partsRepository.findByIdAndMainAssemblyProjectId(5L, 2L)).thenReturn(Optional.of(part));
-        DesignFileService service = service(Path.of(""));
+        DesignFileService service = service();
 
         assertThrows(DesignResourceNotFoundException.class, () -> service.getPartFile(2L, 5L));
     }
 
     @Test
-    void addsProjectFolderOnlyWithinConfiguredBase(@TempDir Path tempDir) throws IOException {
+    void addsProjectFolderWithoutGlobalAllowlist(@TempDir Path tempDir) throws IOException {
         Path projectFolder = Files.createDirectory(tempDir.resolve("project"));
         Projects project = new Projects();
         when(projectRepository.findById(2L)).thenReturn(Optional.of(project));
@@ -108,7 +108,7 @@ class DesignFileServiceTest {
                     ReflectionTestUtils.setField(root, "id", 18L);
                     return root;
                 });
-        DesignFileService service = service(tempDir);
+        DesignFileService service = service();
 
         var result = service.addRoot(
                 2L,
@@ -119,26 +119,24 @@ class DesignFileServiceTest {
     }
 
     @Test
-    void rejectsProjectFolderOutsideConfiguredBase(@TempDir Path tempDir) throws IOException {
-        Path allowedBase = Files.createDirectory(tempDir.resolve("allowed"));
-        Path outsideFolder = Files.createDirectory(tempDir.resolve("private"));
+    void rejectsMissingProjectFolder(@TempDir Path tempDir) {
+        Path missingFolder = tempDir.resolve("missing");
         when(projectRepository.findById(2L)).thenReturn(Optional.of(new Projects()));
-        DesignFileService service = service(allowedBase);
+        DesignFileService service = service();
 
         assertThrows(IllegalArgumentException.class, () -> service.addRoot(
                 2L,
-                new com.nextfirst.plm.design.dto.DesignFileRootRequest(outsideFolder.toString()),
+                new com.nextfirst.plm.design.dto.DesignFileRootRequest(missingFolder.toString()),
                 UsernamePasswordAuthenticationToken.authenticated("designer@example.com", "token", java.util.List.of())));
     }
 
-    private DesignFileService service(Path allowedRoot) {
+    private DesignFileService service() {
         return new DesignFileService(
                 partsRepository,
                 fileRootRepository,
                 projectRepository,
                 auditService,
-                authorizationService,
-                allowedRoot.toString());
+                authorizationService);
     }
 
     private DesignFileRoot fileRoot(Path path) {

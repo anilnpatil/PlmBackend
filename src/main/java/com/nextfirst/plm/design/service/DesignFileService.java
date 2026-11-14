@@ -4,12 +4,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.parameters.P;
@@ -40,25 +38,23 @@ public class DesignFileService {
     private final ProjectRepository projectRepository;
     private final AuthAuditService auditService;
     private final AuthorizationService authorizationService;
-    private final String allowedRootsConfiguration;
 
     public DesignFileService(
             DesignPartsRepository partsRepository,
             DesignFileRootRepository fileRootRepository,
             ProjectRepository projectRepository,
             AuthAuditService auditService,
-            AuthorizationService authorizationService,
-            @Value("${plm.design-files.allowed-roots:}") String allowedRootsConfiguration) {
+            AuthorizationService authorizationService) {
         this.partsRepository = partsRepository;
         this.fileRootRepository = fileRootRepository;
         this.projectRepository = projectRepository;
         this.auditService = auditService;
         this.authorizationService = authorizationService;
-        this.allowedRootsConfiguration = allowedRootsConfiguration;
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
             + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
     public Path getPartFile(
             @P("projectId") Long projectId,
@@ -88,6 +84,7 @@ public class DesignFileService {
 
     @Transactional(readOnly = true)
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
             + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
     public DesignFileRootsResponse listRoots(
             @P("projectId") Long projectId,
@@ -134,6 +131,7 @@ public class DesignFileService {
 
     @Transactional(readOnly = true)
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
             + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
     public DesignFileBrowserResponse browse(
             @P("projectId") Long projectId,
@@ -155,7 +153,7 @@ public class DesignFileService {
                             .thenComparing(DesignFileBrowserEntry::name, String.CASE_INSENSITIVE_ORDER))
                     .toList();
         } catch (IOException exception) {
-            throw new DesignFileStorageNotConfiguredException();
+            throw new DesignFileStorageAccessException();
         }
 
         String currentDirectory = relativePath(root, directory);
@@ -168,38 +166,11 @@ public class DesignFileService {
                 browserRoots, selectedRoot.getId(), currentDirectory, parentDirectory, entries);
     }
 
-    private boolean isUnderRoot(Path file, String configuredRoot) {
-        try {
-            Path root = Path.of(configuredRoot).toRealPath();
-            if (!Files.isDirectory(root)) {
-                throw new DesignFileStorageNotConfiguredException();
-            }
-            return file.startsWith(root);
-        } catch (IOException | InvalidPathException exception) {
-            throw new DesignFileStorageNotConfiguredException();
-        }
-    }
-
-    private List<Path> configuredRoots() {
-        List<Path> roots = Arrays.stream(allowedRootsConfiguration.split(";"))
-                .map(String::trim)
-                .filter(root -> !root.isEmpty())
-                .map(Path::of)
-                .toList();
-        if (roots.isEmpty()) {
-            throw new DesignFileStorageNotConfiguredException();
-        }
-        return roots;
-    }
-
     private Path resolveRegisteredRoot(String requestedPath) {
         try {
             Path root = Path.of(requestedPath.trim()).toRealPath();
             if (!Files.isDirectory(root)) {
                 throw new IllegalArgumentException("The selected server folder does not exist or is not a folder");
-            }
-            if (configuredRoots().stream().noneMatch(base -> isUnderRoot(root, base.toString()))) {
-                throw new IllegalArgumentException("Choose a folder inside the configured server design-file location");
             }
             return root;
         } catch (IOException | InvalidPathException exception) {

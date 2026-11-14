@@ -1,7 +1,10 @@
 package com.nextfirst.plm.auth.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Locale;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -19,7 +22,9 @@ import com.nextfirst.plm.auth.dto.UserResponse;
 import com.nextfirst.plm.auth.entity.AuthPermission;
 import com.nextfirst.plm.auth.entity.AuthRole;
 import com.nextfirst.plm.auth.entity.AuthUser;
+import com.nextfirst.plm.auth.entity.AreaAccessLevel;
 import com.nextfirst.plm.auth.entity.FunctionalArea;
+import com.nextfirst.plm.auth.entity.ProjectAreaAccess;
 import com.nextfirst.plm.auth.entity.ProjectAssignment;
 import com.nextfirst.plm.auth.exception.AuthResourceNotFoundException;
 import com.nextfirst.plm.auth.repository.AuthPermissionRepository;
@@ -167,28 +172,59 @@ public class AdminService {
     @Transactional
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PROJECT_ASSIGN', null)")
     public ProjectAssignmentResponse assignUser(
-            Long projectId, Long userId, Set<String> roleCodes, Set<String> areaCodes) {
+            Long projectId,
+            Long userId,
+            Set<String> roleCodes,
+            Set<String> areaCodes,
+            Map<String, String> areaAccess) {
         Projects project = requireProject(projectId);
         AuthUser user = findUser(userId);
-        Set<AuthRole> requestedRoles = resolveRoles(roleCodes);
-        if (requestedRoles.stream().flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> permission.getCode().equalsIgnoreCase("SYSTEM_ADMIN"))) {
-            throw new IllegalArgumentException("The SYSTEM_ADMIN permission cannot be assigned at project level");
-        }
         ProjectAssignment assignment = assignmentRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseGet(ProjectAssignment::new);
         boolean created = assignment.getId() == null;
         assignment.setProject(project);
         assignment.setUser(user);
-        assignment.getRoles().clear();
-        assignment.getRoles().addAll(requestedRoles);
-        assignment.getFunctionalAreas().clear();
-        assignment.getFunctionalAreas().addAll(resolveAreas(areaCodes));
+        if (areaAccess == null) {
+            Set<AuthRole> requestedRoles = resolveRoles(roleCodes);
+            if (requestedRoles.stream().flatMap(role -> role.getPermissions().stream())
+                    .anyMatch(permission -> permission.getCode().equalsIgnoreCase("SYSTEM_ADMIN"))) {
+                throw new IllegalArgumentException("The SYSTEM_ADMIN permission cannot be assigned at project level");
+            }
+            assignment.getRoles().clear();
+            assignment.getRoles().addAll(requestedRoles);
+            assignment.getFunctionalAreas().clear();
+            assignment.getFunctionalAreas().addAll(resolveAreas(areaCodes));
+            assignment.getAreaAccessGrants().clear();
+        } else {
+            assignment.getFunctionalAreas().clear();
+            assignment.getAreaAccessGrants().clear();
+            for (Map.Entry<String, String> entry : areaAccess.entrySet()) {
+                FunctionalArea area = areaRepository.findByCodeIgnoreCase(entry.getKey().trim())
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Unknown functional area code: " + entry.getKey()));
+                AreaAccessLevel accessLevel;
+                try {
+                    accessLevel = AreaAccessLevel.valueOf(entry.getValue().trim().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException exception) {
+                    throw new IllegalArgumentException(
+                            "Access level must be READ_ONLY or READ_WRITE for " + entry.getKey(), exception);
+                }
+                ProjectAreaAccess grant = new ProjectAreaAccess();
+                grant.setAssignment(assignment);
+                grant.setArea(area);
+                grant.setAccessLevel(accessLevel);
+                assignment.getAreaAccessGrants().add(grant);
+            }
+        }
         assignment = assignmentRepository.save(assignment);
         auditService.record(created ? "PROJECT_USER_ASSIGNED" : "PROJECT_ASSIGNMENT_UPDATED",
                 "PROJECT_ASSIGNMENT", assignment.getId(),
                 "projectId=" + projectId + ", userId=" + userId
-                        + ", roles=" + sorted(roleCodes) + ", areas=" + sorted(areaCodes));
+                        + ", roles=" + assignment.getRoles().stream().map(AuthRole::getCode)
+                                .collect(Collectors.toCollection(TreeSet::new))
+                        + ", areas=" + assignment.getFunctionalAreas().stream()
+                                .map(FunctionalArea::getCode).collect(Collectors.toCollection(TreeSet::new))
+                        + ", areaAccess=" + toAreaAccess(assignment));
         return toAssignmentResponse(assignment);
     }
 
@@ -273,15 +309,43 @@ public class AdminService {
     }
 
     private ProjectAssignmentResponse toAssignmentResponse(ProjectAssignment assignment) {
+        Set<String> functionalAreas = assignment.getFunctionalAreas().stream()
+                .map(FunctionalArea::getCode)
+                .collect(Collectors.toCollection(TreeSet::new));
+        assignment.getAreaAccessGrants().stream()
+                .map(grant -> grant.getArea().getCode())
+                .forEach(functionalAreas::add);
         return new ProjectAssignmentResponse(
                 assignment.getUser().getId(),
                 assignment.getUser().getEmail(),
                 assignment.getUser().getFullName(),
                 assignment.getRoles().stream().map(AuthRole::getCode)
                         .collect(Collectors.toCollection(TreeSet::new)),
-                assignment.getFunctionalAreas().stream().map(FunctionalArea::getCode)
-                        .collect(Collectors.toCollection(TreeSet::new)),
+                functionalAreas,
+                toAreaAccess(assignment),
                 assignment.getAssignedAt());
+    }
+
+    private Map<String, String> toAreaAccess(ProjectAssignment assignment) {
+        Map<String, String> access = new TreeMap<>();
+        assignment.getAreaAccessGrants().forEach(grant ->
+                access.put(grant.getArea().getCode(), grant.getAccessLevel().name()));
+        if (!access.isEmpty()) {
+            return access;
+        }
+        Set<String> permissions = assignment.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .map(permission -> permission.getCode().toUpperCase())
+                .collect(Collectors.toSet());
+        for (FunctionalArea area : assignment.getFunctionalAreas()) {
+            if (ProjectAreaPermissionPolicy.hasWritePermission(permissions, area.getCode())) {
+                access.put(area.getCode(), AreaAccessLevel.READ_WRITE.name());
+            } else if (ProjectAreaPermissionPolicy.hasReadPermission(permissions, area.getCode())
+                    || permissions.contains("PROJECT_READ")) {
+                access.put(area.getCode(), AreaAccessLevel.READ_ONLY.name());
+            }
+        }
+        return access;
     }
 
     private Set<String> sorted(Set<String> values) {

@@ -1,5 +1,6 @@
 package com.nextfirst.plm.design.service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -59,10 +60,13 @@ public class DesignRegisterService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN')")
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
     public DesignWorkspaceResponse workspace(@P("projectId") Long projectId, Authentication authentication) {
         requireProject(projectId);
         boolean canReadParts = hasPermission(authentication, projectId, "PARTS_READ");
+        boolean canUpdateParts = hasPermission(authentication, projectId, "PARTS_UPDATE");
         List<DesignMainAssemblyResponse> mainAssemblies = mainAssemblyRepository
                 .findByProjectIdOrderById(projectId)
                 .stream().map(assembly -> mainAssemblyResponse(assembly, canReadParts)).toList();
@@ -70,7 +74,7 @@ public class DesignRegisterService {
                 hasPermission(authentication, projectId, "ASSEMBLY_CREATE"),
                 hasPermission(authentication, projectId, "PARTS_CREATE"),
                 canReadParts,
-                hasPermission(authentication, projectId, "PARTS_UPDATE")));
+                canUpdateParts));
     }
 
     @Transactional
@@ -140,11 +144,6 @@ public class DesignRegisterService {
             throw new IllegalArgumentException(
                     "The selected subassembly does not belong to the selected main assembly");
         }
-        if (request.startDate() != null && request.completedDate() != null
-                && request.completedDate().isBefore(request.startDate())) {
-            throw new IllegalArgumentException("Completed date cannot be before start date");
-        }
-
         String number = request.partNumber().trim();
         boolean duplicate = subAssembly == null
                 ? partsRepository.existsByMainAssemblyIdAndSubAssemblyIsNullAndPartNumberIgnoreCase(
@@ -169,11 +168,59 @@ public class DesignRegisterService {
                 ? PartStatus.NOT_STARTED
                 : request.partStatus());
         part.setFilePath(blankToNull(request.filePath()));
-        part.setStartDate(request.startDate());
-        part.setCompletedDate(request.completedDate());
+        LocalDate today = LocalDate.now();
+        part.setStartDate(today);
+        part.setCompletedDate(part.getPartStatus() == PartStatus.READY_TO_PURCHASE ? today : null);
         part.setCreatedBy(authentication.getName());
         part = partsRepository.save(part);
         auditService.record("DESIGN_PART_CREATED", "DESIGN_PART", part.getId(), part.getPartNumber());
+        return partResponse(part);
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
+    public DesignPartsResponse updatePart(
+            @P("projectId") Long projectId,
+            Long partId,
+            DesignPartsRequest request,
+            Authentication authentication) {
+        DesignParts part = partsRepository.findByIdAndMainAssemblyProjectId(partId, projectId)
+                .orElseThrow(() -> new DesignResourceNotFoundException("Part", partId));
+
+        String number = request.partNumber().trim();
+        boolean numberChanged = !part.getPartNumber().equalsIgnoreCase(number);
+        if (numberChanged) {
+            boolean duplicate = part.getSubAssembly() == null
+                    ? partsRepository.existsByMainAssemblyIdAndSubAssemblyIsNullAndPartNumberIgnoreCase(
+                            part.getMainAssembly().getId(), number)
+                    : partsRepository.existsBySubAssemblyIdAndPartNumberIgnoreCase(
+                            part.getSubAssembly().getId(), number);
+            if (duplicate) {
+                throw new IllegalArgumentException("A part with this number already exists in the selected assembly");
+            }
+        }
+
+        PartStatus previousStatus = part.getPartStatus();
+        PartStatus nextStatus = request.partStatus() == null ? previousStatus : request.partStatus();
+        part.setPartNumber(number);
+        part.setPartName(request.partName().trim());
+        part.setQuantity(request.quantity());
+        part.setDescription(blankToNull(request.description()));
+        part.setMake(blankToNull(request.make()));
+        part.setModeOfPurchase(request.modeOfPurchase() == null
+                ? ModeOfPurchase.PURCHASE
+                : request.modeOfPurchase());
+        part.setPartStatus(nextStatus);
+        part.setFilePath(blankToNull(request.filePath()));
+        if (previousStatus != PartStatus.READY_TO_PURCHASE
+                && nextStatus == PartStatus.READY_TO_PURCHASE) {
+            part.setCompletedDate(LocalDate.now());
+        } else if (nextStatus != PartStatus.READY_TO_PURCHASE) {
+            part.setCompletedDate(null);
+        }
+
+        part = partsRepository.save(part);
+        auditService.record("DESIGN_PART_UPDATED", "DESIGN_PART", part.getId(), part.getPartNumber());
         return partResponse(part);
     }
 
@@ -188,6 +235,12 @@ public class DesignRegisterService {
                 .orElseThrow(() -> new DesignResourceNotFoundException("Part", partId));
         PartStatus previousStatus = part.getPartStatus();
         part.setPartStatus(request.partStatus());
+        if (previousStatus != PartStatus.READY_TO_PURCHASE
+                && request.partStatus() == PartStatus.READY_TO_PURCHASE) {
+            part.setCompletedDate(LocalDate.now());
+        } else if (request.partStatus() != PartStatus.READY_TO_PURCHASE) {
+            part.setCompletedDate(null);
+        }
         part = partsRepository.save(part);
         auditService.record("DESIGN_PART_STATUS_UPDATED", "DESIGN_PART", part.getId(),
                 previousStatus + " -> " + part.getPartStatus());
@@ -273,6 +326,8 @@ public class DesignRegisterService {
         if ("PARTS_READ".equals(permission)) {
             return authorizationService.hasProjectPermission(
                     authentication, projectId, "PARTS_READ", DESIGN_AREA)
+                    || authorizationService.hasProjectPermission(
+                            authentication, projectId, "DESIGN_READ", DESIGN_AREA)
                     || authorizationService.hasProjectPermission(
                             authentication, projectId, "PARTS_UPDATE", DESIGN_AREA);
         }

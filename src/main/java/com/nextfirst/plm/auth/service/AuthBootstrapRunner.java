@@ -36,9 +36,13 @@ public class AuthBootstrapRunner implements ApplicationRunner {
             "DESIGN_RETURN", "PARTS_CREATE", "PARTS_READ", "PARTS_UPDATE",
             "ASSEMBLY_CREATE", "ASSEMBLY_READ", "ASSEMBLY_UPDATE",
             "STORE_RECEIPT_MANAGE", "STORE_UPDATE",
-            "ASSEMBLY_PROGRESS_UPDATE", "CONTROLS_TASK_MANAGE", "CONTROLS_TASK_UPDATE",
+            "ASSEMBLY_PROGRESS_UPDATE", "CONTROLS_TASK_READ", "CONTROLS_TASK_MANAGE", "CONTROLS_TASK_UPDATE",
+            "ELECTRICAL_READ", "ELECTRICAL_UPDATE",
             "SOURCING_SUPPLIER_MANAGE", "SOURCING_QUOTE_MANAGE", "SOURCING_COST_MANAGE",
-            "SOURCING_PURCHASE_MANAGE");
+            "SOURCING_PURCHASE_MANAGE",
+            "PURCHASE_COMPONENTS_READ", "PURCHASE_COMPONENTS_UPDATE",
+            "MANUFACTURING_COMPONENTS_READ", "MANUFACTURING_COMPONENTS_UPDATE",
+            "PROJECT_STOCK_READ", "PROJECT_STOCK_UPDATE");
 
     private static final Map<String, Set<String>> STARTER_ROLES = starterRoles();
 
@@ -82,7 +86,8 @@ public class AuthBootstrapRunner implements ApplicationRunner {
                             new AuthPermission(code, code.replace('_', ' '), "PLM authorization permission")));
         }
         for (Map.Entry<String, Set<String>> roleDefinition : STARTER_ROLES.entrySet()) {
-            if (roleRepository.findByCodeIgnoreCase(roleDefinition.getKey()).isEmpty()) {
+            var existingRole = roleRepository.findByCodeIgnoreCase(roleDefinition.getKey());
+            if (existingRole.isEmpty()) {
                 AuthRole role = new AuthRole();
                 role.setCode(roleDefinition.getKey());
                 role.setName(roleDefinition.getKey().replace('_', ' '));
@@ -91,16 +96,27 @@ public class AuthBootstrapRunner implements ApplicationRunner {
                         .map(code -> permissionRepository.findByCodeIgnoreCase(code).orElseThrow())
                         .toList());
                 roleRepository.save(role);
+            } else {
+                AuthRole role = existingRole.get();
+                AuthPermission projectRead = permissionRepository.findByCodeIgnoreCase("PROJECT_READ")
+                        .orElseThrow();
+                if (role.getPermissions().add(projectRead)) {
+                    roleRepository.save(role);
+                }
             }
         }
-        Map<String, String> areas = Map.of(
-                "PROJECT", "Project",
-                "DESIGN", "Design",
-                "REVIEW", "Review",
-                "STORE", "Store",
-                "ASSEMBLY", "Assembly",
-                "CONTROLS", "Controls",
-                "SOURCING", "Sourcing");
+        Map<String, String> areas = Map.ofEntries(
+                Map.entry("PROJECT", "Project"),
+                Map.entry("DESIGN", "Design"),
+                Map.entry("REVIEW", "Review"),
+                Map.entry("STORE", "Store"),
+                Map.entry("ASSEMBLY", "Assembly"),
+                Map.entry("CONTROLS", "Controls"),
+                Map.entry("ELECTRICAL", "Electrical"),
+                Map.entry("SOURCING", "Sourcing"),
+                Map.entry("PURCHASE", "Purchase"),
+                Map.entry("MANUFACTURING", "Manufacturing"),
+                Map.entry("STOCK", "Project Stock"));
         areas.forEach((code, name) -> areaRepository.findByCodeIgnoreCase(code)
                 .orElseGet(() -> areaRepository.save(new FunctionalArea(code, name))));
 
@@ -148,7 +164,13 @@ public class AuthBootstrapRunner implements ApplicationRunner {
         roles.put("CONTROLS", Set.of("PROJECT_READ", "CONTROLS_TASK_MANAGE", "CONTROLS_TASK_UPDATE"));
         roles.put("SOURCING", Set.of(
                 "PROJECT_READ", "SOURCING_SUPPLIER_MANAGE", "SOURCING_QUOTE_MANAGE",
-                "SOURCING_COST_MANAGE", "SOURCING_PURCHASE_MANAGE"));
+                    "SOURCING_COST_MANAGE", "SOURCING_PURCHASE_MANAGE"));
+        roles.put("PURCHASE", Set.of(
+                    "PROJECT_READ", "PURCHASE_COMPONENTS_READ", "PURCHASE_COMPONENTS_UPDATE"));
+        roles.put("MANUFACTURING", Set.of(
+                "PROJECT_READ", "MANUFACTURING_COMPONENTS_READ", "MANUFACTURING_COMPONENTS_UPDATE"));
+        roles.put("PROJECT_STOCK", Set.of(
+                "PROJECT_READ", "PROJECT_STOCK_READ", "PROJECT_STOCK_UPDATE"));
         return roles;
     }
 }

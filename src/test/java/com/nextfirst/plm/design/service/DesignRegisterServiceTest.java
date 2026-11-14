@@ -1,6 +1,7 @@
 package com.nextfirst.plm.design.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,6 +91,9 @@ class DesignRegisterServiceTest {
         assertEquals("C:\\designs\\P-100.pdf", response.filePath());
         assertEquals(ModeOfPurchase.MANUFACTURE, response.modeOfPurchase());
         assertEquals(PartStatus.IN_PROGRESS, response.partStatus());
+        assertEquals("designer@example.com", response.createdBy());
+        assertEquals(LocalDate.now(), response.startDate());
+        assertNull(response.completedDate());
         verify(partsRepository).save(any(DesignParts.class));
     }
 
@@ -104,17 +108,21 @@ class DesignRegisterServiceTest {
         assertNull(response.subAssemblyId());
         assertEquals(ModeOfPurchase.PURCHASE, response.modeOfPurchase());
         assertEquals(PartStatus.NOT_STARTED, response.partStatus());
+        assertEquals(LocalDate.now(), response.startDate());
+        assertNull(response.completedDate());
     }
 
     @Test
-    void rejectsCompletedDateEarlierThanStartDate() {
-        assertThrows(IllegalArgumentException.class, () -> service.createPart(1L, new DesignPartsRequest(
-                10L, null, "P-102", "Panel", BigDecimal.ONE,
-                null, null, null, LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 21),
-                null, null),
-                authentication));
+    void createsReadyPartWithCurrentCompletionDateForSystemAdmin() {
+        when(authorizationService.isSystemAdmin(authentication)).thenReturn(true);
 
-        verify(partsRepository, never()).save(any(DesignParts.class));
+        var response = service.createPart(1L, new DesignPartsRequest(
+                10L, null, "P-102", "Panel", BigDecimal.ONE,
+                null, null, null, null, null, null, PartStatus.READY_TO_PURCHASE),
+                authentication);
+
+        assertEquals(LocalDate.now(), response.startDate());
+        assertEquals(LocalDate.now(), response.completedDate());
     }
 
     @Test
@@ -145,9 +153,114 @@ class DesignRegisterServiceTest {
                 1L, 30L, new DesignPartStatusRequest(PartStatus.READY_TO_PURCHASE), authentication);
 
         assertEquals(PartStatus.READY_TO_PURCHASE, response.partStatus());
+        assertEquals(LocalDate.now(), response.completedDate());
         verify(partsRepository).save(part);
         verify(auditService).record(
                 "DESIGN_PART_STATUS_UPDATED", "DESIGN_PART", 30L, "NOT_STARTED -> READY_TO_PURCHASE");
+    }
+
+    @Test
+    void allowsAssignedDesignerToChangeReadyPartStatus() {
+        DesignParts part = new DesignParts();
+        part.setMainAssembly(mainAssembly);
+        part.setPartNumber("P-105");
+        part.setPartName("Bearing");
+        part.setQuantity(BigDecimal.ONE);
+        part.setPartStatus(PartStatus.READY_TO_PURCHASE);
+        ReflectionTestUtils.setField(part, "id", 31L);
+        when(partsRepository.findByIdAndMainAssemblyProjectId(31L, 1L)).thenReturn(Optional.of(part));
+        when(authorizationService.isSystemAdmin(authentication)).thenReturn(false);
+
+        var response = service.updatePartStatus(
+                1L, 31L, new DesignPartStatusRequest(PartStatus.IN_PROGRESS), authentication);
+
+        assertEquals(PartStatus.IN_PROGRESS, response.partStatus());
+        assertNull(response.completedDate());
+        verify(partsRepository).save(part);
+    }
+
+    @Test
+    void allowsSystemAdminToChangeReadyPartStatus() {
+        DesignParts part = new DesignParts();
+        part.setMainAssembly(mainAssembly);
+        part.setPartNumber("P-106");
+        part.setPartName("Bearing");
+        part.setQuantity(BigDecimal.ONE);
+        part.setPartStatus(PartStatus.READY_TO_PURCHASE);
+        ReflectionTestUtils.setField(part, "id", 32L);
+        when(partsRepository.findByIdAndMainAssemblyProjectId(32L, 1L)).thenReturn(Optional.of(part));
+        when(authorizationService.isSystemAdmin(authentication)).thenReturn(true);
+
+        var response = service.updatePartStatus(
+                1L, 32L, new DesignPartStatusRequest(PartStatus.IN_PROGRESS), authentication);
+
+        assertEquals(PartStatus.IN_PROGRESS, response.partStatus());
+        assertNull(response.completedDate());
+        verify(partsRepository).save(part);
+    }
+
+    @Test
+    void allowsDesignerToCreatePartAsReadyForPurchase() {
+        when(authorizationService.isSystemAdmin(authentication)).thenReturn(false);
+
+        var response = service.createPart(1L, new DesignPartsRequest(
+                10L, null, "P-107", "Bearing", BigDecimal.ONE,
+                null, null, null, null, null, ModeOfPurchase.PURCHASE, PartStatus.READY_TO_PURCHASE),
+                authentication);
+
+        assertEquals(PartStatus.READY_TO_PURCHASE, response.partStatus());
+        assertEquals(LocalDate.now(), response.completedDate());
+        verify(partsRepository).save(any(DesignParts.class));
+    }
+
+    @Test
+    void allowsAssignedDesignerToEditPartAlreadyReadyForPurchase() {
+        DesignParts part = new DesignParts();
+        part.setMainAssembly(mainAssembly);
+        part.setPartNumber("P-108");
+        part.setPartName("Bearing");
+        part.setQuantity(BigDecimal.ONE);
+        part.setPartStatus(PartStatus.READY_TO_PURCHASE);
+        ReflectionTestUtils.setField(part, "id", 33L);
+        when(partsRepository.findByIdAndMainAssemblyProjectId(33L, 1L)).thenReturn(Optional.of(part));
+        when(authorizationService.isSystemAdmin(authentication)).thenReturn(false);
+
+        var response = service.updatePart(1L, 33L, new DesignPartsRequest(
+                10L, null, "P-108", "Updated bearing", BigDecimal.ONE,
+                null, null, null, null, null, ModeOfPurchase.PURCHASE, PartStatus.READY_TO_PURCHASE),
+                authentication);
+
+        assertEquals("Updated bearing", response.partName());
+        assertEquals(PartStatus.READY_TO_PURCHASE, response.partStatus());
+        verify(partsRepository).save(part);
+    }
+
+    @Test
+    void updatesPartDetailsAndKeepsCreatorAndStartDate() {
+        DesignParts part = new DesignParts();
+        part.setMainAssembly(mainAssembly);
+        part.setPartNumber("P-109");
+        part.setPartName("Old name");
+        part.setQuantity(BigDecimal.ONE);
+        part.setModeOfPurchase(ModeOfPurchase.PURCHASE);
+        part.setPartStatus(PartStatus.NOT_STARTED);
+        part.setCreatedBy("original@example.com");
+        part.setStartDate(LocalDate.of(2026, 1, 2));
+        ReflectionTestUtils.setField(part, "id", 34L);
+        when(partsRepository.findByIdAndMainAssemblyProjectId(34L, 1L)).thenReturn(Optional.of(part));
+
+        var response = service.updatePart(1L, 34L, new DesignPartsRequest(
+                10L, null, "P-109", "Updated name", new BigDecimal("3"),
+                "Updated description", "in-house", "C:\\designs\\P-109.pdf",
+                LocalDate.now(), null, ModeOfPurchase.MANUFACTURE, PartStatus.IN_PROGRESS),
+                authentication);
+
+        assertEquals("Updated name", response.partName());
+        assertEquals(new BigDecimal("3"), response.quantity());
+        assertEquals("original@example.com", response.createdBy());
+        assertEquals(LocalDate.of(2026, 1, 2), response.startDate());
+        assertNull(response.completedDate());
+        verify(partsRepository).save(part);
     }
 
     @Test
@@ -173,18 +286,36 @@ class DesignRegisterServiceTest {
     }
 
     @Test
-    void partsUpdatePermissionCanReadPartsInWorkspace() {
+    void projectReadAloneDoesNotGrantDesignAreaAccess() {
+        DesignParts part = new DesignParts();
+        part.setMainAssembly(mainAssembly);
+        part.setSubAssembly(subAssembly);
+        part.setPartNumber("P-108");
+        part.setPartName("Bracket");
+        part.setQuantity(BigDecimal.ONE);
+
         when(mainAssemblyRepository.findByProjectIdOrderById(1L)).thenReturn(List.of(mainAssembly));
         when(subAssemblyRepository.findByMainAssemblyIdOrderById(10L)).thenReturn(List.of(subAssembly));
         when(partsRepository.findByMainAssemblyIdOrderByPartNumber(10L)).thenReturn(List.of());
-        when(partsRepository.findBySubAssemblyIdOrderByPartNumber(20L)).thenReturn(List.of());
-        when(authorizationService.hasProjectPermission(authentication, 1L, "PARTS_READ", "DESIGN"))
-                .thenReturn(false);
+        when(partsRepository.findBySubAssemblyIdOrderByPartNumber(20L)).thenReturn(List.of(part));
+        when(authorizationService.hasProjectPermission(authentication, 1L, "PROJECT_READ", null))
+                .thenReturn(true);
+
+        var workspace = service.workspace(1L, authentication);
+
+        assertFalse(workspace.permissions().canReadParts());
+        assertEquals(0, workspace.mainAssemblies().get(0).subAssemblies().get(0).parts().size());
+        assertFalse(workspace.permissions().canUpdateParts());
+    }
+
+    @Test
+    void designWritersCanOverrideReadyPartLock() {
+        when(mainAssemblyRepository.findByProjectIdOrderById(1L)).thenReturn(List.of());
         when(authorizationService.hasProjectPermission(authentication, 1L, "PARTS_UPDATE", "DESIGN"))
                 .thenReturn(true);
 
         var workspace = service.workspace(1L, authentication);
 
-        assertTrue(workspace.permissions().canReadParts());
+        assertTrue(workspace.permissions().canUpdateParts());
     }
 }

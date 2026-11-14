@@ -48,7 +48,7 @@ public class ProjectAssignmentController {
             @PathVariable Long userId,
             @Valid @RequestBody ProjectAssignmentRequest request) {
         return adminService.assignUser(
-                projectId, userId, request.roleCodes(), request.functionalAreaCodes());
+                projectId, userId, request.roleCodes(), request.functionalAreaCodes(), request.areaAccess());
     }
 
     @DeleteMapping("/assignments/{userId}")

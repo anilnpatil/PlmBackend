@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.nextfirst.plm.project.exception.DuplicateProjectNumberException;
 import com.nextfirst.plm.project.exception.ProjectNotFoundException;
 import com.nextfirst.plm.auth.exception.AuthResourceNotFoundException;
-import com.nextfirst.plm.design.service.DesignFileStorageNotConfiguredException;
+import com.nextfirst.plm.design.service.DesignFileStorageAccessException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -30,8 +30,8 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
-    @ExceptionHandler(DesignFileStorageNotConfiguredException.class)
-    public ProblemDetail handleDesignFileStorageNotConfigured(DesignFileStorageNotConfiguredException exception) {
+    @ExceptionHandler(DesignFileStorageAccessException.class)
+    public ProblemDetail handleDesignFileStorageAccess(DesignFileStorageAccessException exception) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
     }
 

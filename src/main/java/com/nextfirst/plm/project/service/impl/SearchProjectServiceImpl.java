@@ -107,7 +107,15 @@ public class SearchProjectServiceImpl implements SearchProjectService {
                                 criteriaBuilder.equal(assignment.get("user").get("id"), visibleUserId),
                                 criteriaBuilder.equal(assignment.get("project").get("id"), root.get("id")),
                                 criteriaBuilder.equal(permission.get("code"), "PROJECT_READ"));
-                predicate = criteriaBuilder.and(predicate, criteriaBuilder.exists(assignmentQuery));
+                Subquery<Long> areaAccessQuery = query.subquery(Long.class);
+                Root<ProjectAssignment> areaAssignment = areaAccessQuery.from(ProjectAssignment.class);
+                areaAssignment.join("areaAccessGrants");
+                areaAccessQuery.select(areaAssignment.get("project").get("id"))
+                        .where(
+                                criteriaBuilder.equal(areaAssignment.get("user").get("id"), visibleUserId),
+                                criteriaBuilder.equal(areaAssignment.get("project").get("id"), root.get("id")));
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.or(
+                        criteriaBuilder.exists(assignmentQuery), criteriaBuilder.exists(areaAccessQuery)));
             }
             predicate = addContainsFilter(predicate, root, criteriaBuilder, "projectNumber", request.getProjectNumber());
             predicate = addContainsFilter(predicate, root, criteriaBuilder, "projectName", request.getProjectName());

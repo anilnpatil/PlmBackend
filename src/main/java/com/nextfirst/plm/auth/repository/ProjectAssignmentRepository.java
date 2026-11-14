@@ -23,4 +23,12 @@ public interface ProjectAssignmentRepository extends JpaRepository<ProjectAssign
             """)
     long countByUserIdAndPermissionCode(
             @Param("userId") Long userId, @Param("permissionCode") String permissionCode);
+
+    @Query("""
+            select count(distinct assignment.id)
+            from ProjectAssignment assignment
+            join assignment.areaAccessGrants areaAccess
+            where assignment.user.id = :userId
+            """)
+    long countByUserIdWithAreaAccess(@Param("userId") Long userId);
 }
