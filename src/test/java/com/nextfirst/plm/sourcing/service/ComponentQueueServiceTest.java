@@ -26,6 +26,8 @@ import com.nextfirst.plm.sourcing.entity.PurchaseComponentWorkflow;
 import com.nextfirst.plm.sourcing.repository.ManufacturingComponentWorkflowRepository;
 import com.nextfirst.plm.sourcing.repository.ProjectStockItemRepository;
 import com.nextfirst.plm.sourcing.repository.PurchaseComponentWorkflowRepository;
+import com.nextfirst.plm.supplier.entity.Supplier;
+import com.nextfirst.plm.supplier.repository.SupplierRepository;
 
 class ComponentQueueServiceTest {
     private final DesignPartsRepository designPartsRepository = mock(DesignPartsRepository.class);
@@ -36,6 +38,9 @@ class ComponentQueueServiceTest {
     private final ProjectStockItemRepository stockItemRepository = mock(ProjectStockItemRepository.class);
     private final ProjectRepository projectRepository = mock(ProjectRepository.class);
     private final AuthAuditService auditService = mock(AuthAuditService.class);
+    private final SupplierRepository supplierRepository = mock(SupplierRepository.class);
+    private final SupplierSelectionResolver supplierSelectionResolver =
+            new SupplierSelectionResolver(supplierRepository);
 
     @BeforeEach
     void setUp() {
@@ -51,7 +56,8 @@ class ComponentQueueServiceTest {
     @Test
     void purchaseQueueUsesPurchaseModeAndReadyStatus() {
         PurchaseComponentsService service = new PurchaseComponentsService(
-                designPartsRepository, purchaseWorkflowRepository, projectRepository, auditService);
+                designPartsRepository, purchaseWorkflowRepository, projectRepository, auditService,
+                supplierSelectionResolver);
 
         assertTrue(service.components(42L, null).isEmpty());
 
@@ -62,7 +68,8 @@ class ComponentQueueServiceTest {
     @Test
     void manufacturingQueueUsesManufacturingModeAndReadyStatus() {
         ManufacturingComponentsService service = new ManufacturingComponentsService(
-                designPartsRepository, manufacturingWorkflowRepository, projectRepository, auditService);
+                designPartsRepository, manufacturingWorkflowRepository, projectRepository, auditService,
+                supplierSelectionResolver);
 
         assertTrue(service.components(42L, null).isEmpty());
 
@@ -94,14 +101,17 @@ class ComponentQueueServiceTest {
         part.setPartStatus(PartStatus.READY_TO_PURCHASE);
         PurchaseComponentWorkflow workflow = new PurchaseComponentWorkflow();
         workflow.setDesignPart(part);
-        workflow.setSupplierName("Acme Supplies");
+        Supplier supplier = new Supplier();
+        supplier.setName("Acme Supplies");
+        workflow.setSupplier(supplier);
         when(designPartsRepository.findReadyForMode(
                 42L, ModeOfPurchase.PURCHASE, PartStatus.READY_TO_PURCHASE, true))
                 .thenReturn(List.of(part));
         when(purchaseWorkflowRepository.findByDesignPartIdIn(List.of(101L))).thenReturn(List.of(workflow));
 
         PurchaseComponentsService service = new PurchaseComponentsService(
-                designPartsRepository, purchaseWorkflowRepository, projectRepository, auditService);
+                designPartsRepository, purchaseWorkflowRepository, projectRepository, auditService,
+                supplierSelectionResolver);
 
         var components = service.components(42L, null);
 
@@ -132,7 +142,8 @@ class ComponentQueueServiceTest {
         when(manufacturingWorkflowRepository.findByDesignPartIdIn(List.of(102L))).thenReturn(List.of());
 
         ManufacturingComponentsService service = new ManufacturingComponentsService(
-                designPartsRepository, manufacturingWorkflowRepository, projectRepository, auditService);
+                designPartsRepository, manufacturingWorkflowRepository, projectRepository, auditService,
+                supplierSelectionResolver);
 
         var components = service.components(42L, null);
 

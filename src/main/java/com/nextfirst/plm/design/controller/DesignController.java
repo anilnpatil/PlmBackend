@@ -125,6 +125,40 @@ public class DesignController {
         return registerService.createSubAssembly(projectId, mainAssemblyId, request, authentication);
     }
 
+    @PutMapping("/main-assemblies/{mainAssemblyId}")
+    public DesignMainAssemblyResponse updateMainAssembly(
+            @P("projectId") @PathVariable Long projectId,
+            @PathVariable Long mainAssemblyId,
+            @Valid @RequestBody DesignMainAssemblyRequest request,
+            Authentication authentication) {
+        return registerService.updateMainAssembly(projectId, mainAssemblyId, request, authentication);
+    }
+
+    @DeleteMapping("/main-assemblies/{mainAssemblyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMainAssembly(
+            @P("projectId") @PathVariable Long projectId,
+            @PathVariable Long mainAssemblyId) {
+        registerService.deleteMainAssembly(projectId, mainAssemblyId);
+    }
+
+    @PutMapping("/sub-assemblies/{subAssemblyId}")
+    public DesignSubAssemblyResponse updateSubAssembly(
+            @P("projectId") @PathVariable Long projectId,
+            @PathVariable Long subAssemblyId,
+            @Valid @RequestBody DesignSubAssemblyRequest request,
+            Authentication authentication) {
+        return registerService.updateSubAssembly(projectId, subAssemblyId, request, authentication);
+    }
+
+    @DeleteMapping("/sub-assemblies/{subAssemblyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteSubAssembly(
+            @P("projectId") @PathVariable Long projectId,
+            @PathVariable Long subAssemblyId) {
+        registerService.deleteSubAssembly(projectId, subAssemblyId);
+    }
+
     @PostMapping("/parts")
     @ResponseStatus(HttpStatus.CREATED)
     public DesignPartsResponse createPart(
@@ -141,6 +175,14 @@ public class DesignController {
             @Valid @RequestBody DesignPartsRequest request,
             Authentication authentication) {
         return registerService.updatePart(projectId, partId, request, authentication);
+    }
+
+    @DeleteMapping("/parts/{partId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePart(
+            @P("projectId") @PathVariable Long projectId,
+            @PathVariable Long partId) {
+        registerService.deletePart(projectId, partId);
     }
 
     @PatchMapping("/parts/{partId}/status")

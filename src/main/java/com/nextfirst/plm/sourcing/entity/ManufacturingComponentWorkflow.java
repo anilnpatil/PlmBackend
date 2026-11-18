@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.nextfirst.plm.design.entity.DesignParts;
+import com.nextfirst.plm.supplier.entity.Supplier;
 
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
@@ -19,6 +20,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.ManyToOne;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -34,8 +36,9 @@ public class ManufacturingComponentWorkflow {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private DesignParts designPart;
 
-    @Column(name = "supplier_name", length = 150)
-    private String supplierName;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "quotation_status", nullable = false, length = 20)
@@ -81,8 +84,8 @@ public class ManufacturingComponentWorkflow {
     public Long getId() { return id; }
     public DesignParts getDesignPart() { return designPart; }
     public void setDesignPart(DesignParts designPart) { this.designPart = designPart; }
-    public String getSupplierName() { return supplierName; }
-    public void setSupplierName(String supplierName) { this.supplierName = supplierName; }
+    public Supplier getSupplier() { return supplier; }
+    public void setSupplier(Supplier supplier) { this.supplier = supplier; }
     public QuotationStatus getQuotationStatus() { return quotationStatus; }
     public void setQuotationStatus(QuotationStatus quotationStatus) { this.quotationStatus = quotationStatus; }
     public LocalDate getQuotationRequestedDate() { return quotationRequestedDate; }

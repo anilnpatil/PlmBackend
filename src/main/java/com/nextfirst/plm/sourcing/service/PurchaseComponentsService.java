@@ -23,6 +23,7 @@ import com.nextfirst.plm.sourcing.dto.ProcurementComponentResponse;
 import com.nextfirst.plm.sourcing.dto.ProcurementWorkflowRequest;
 import com.nextfirst.plm.sourcing.entity.PurchaseComponentWorkflow;
 import com.nextfirst.plm.sourcing.repository.PurchaseComponentWorkflowRepository;
+import com.nextfirst.plm.supplier.entity.SupplierServiceType;
 
 @Service
 public class PurchaseComponentsService {
@@ -30,16 +31,19 @@ public class PurchaseComponentsService {
     private final PurchaseComponentWorkflowRepository workflowRepository;
     private final ProjectRepository projectRepository;
     private final AuthAuditService auditService;
+    private final SupplierSelectionResolver supplierSelectionResolver;
 
     public PurchaseComponentsService(
             DesignPartsRepository designPartsRepository,
             PurchaseComponentWorkflowRepository workflowRepository,
             ProjectRepository projectRepository,
-            AuthAuditService auditService) {
+            AuthAuditService auditService,
+            SupplierSelectionResolver supplierSelectionResolver) {
         this.designPartsRepository = designPartsRepository;
         this.workflowRepository = workflowRepository;
         this.projectRepository = projectRepository;
         this.auditService = auditService;
+        this.supplierSelectionResolver = supplierSelectionResolver;
     }
 
     @Transactional(readOnly = true)
@@ -70,7 +74,8 @@ public class PurchaseComponentsService {
                 .orElseGet(PurchaseComponentWorkflow::new);
         boolean created = workflow.getId() == null;
         workflow.setDesignPart(part);
-        workflow.setSupplierName(blankToNull(request.supplierName()));
+        workflow.setSupplier(supplierSelectionResolver.resolve(
+                request.supplierId(), request.supplierName(), SupplierServiceType.PURCHASE));
         workflow.setQuotationStatus(request.quotationStatus());
         workflow.setQuotationRequestedDate(request.quotationRequestedDate());
         workflow.setQuotationReceivedDate(request.quotationReceivedDate());
@@ -110,7 +115,4 @@ public class PurchaseComponentsService {
         projectRepository.findById(projectId).orElseThrow(() -> new ProjectNotFoundException(projectId));
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 }

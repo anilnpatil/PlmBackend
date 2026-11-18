@@ -13,6 +13,7 @@ public record ProcurementComponentResponse(
         Long workflowId,
         String partNumber,
         String partName,
+        Long supplierId,
         String supplierName,
         BigDecimal quantity,
         String mainAssemblyNumber,

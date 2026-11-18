@@ -16,6 +16,8 @@ import com.nextfirst.plm.project.exception.DuplicateProjectNumberException;
 import com.nextfirst.plm.project.exception.ProjectNotFoundException;
 import com.nextfirst.plm.auth.exception.AuthResourceNotFoundException;
 import com.nextfirst.plm.design.service.DesignFileStorageAccessException;
+import com.nextfirst.plm.supplier.exception.DuplicateSupplierException;
+import com.nextfirst.plm.supplier.exception.SupplierNotFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -27,6 +29,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(AuthResourceNotFoundException.class)
     public ProblemDetail handleAuthResourceNotFound(AuthResourceNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(SupplierNotFoundException.class)
+    public ProblemDetail handleSupplierNotFound(SupplierNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
@@ -42,6 +49,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DuplicateProjectNumberException.class)
     public ProblemDetail handleDuplicateProjectNumber(DuplicateProjectNumberException exception) {
+        return problem(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateSupplierException.class)
+    public ProblemDetail handleDuplicateSupplier(DuplicateSupplierException exception) {
         return problem(HttpStatus.CONFLICT, exception.getMessage());
     }
 

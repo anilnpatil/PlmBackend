@@ -99,7 +99,13 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/admin/**", "/api/projects/**").authenticated()
+                        .requestMatchers(
+                                "/api/auth/me",
+                                "/api/admin/**",
+                                "/api/projects/**",
+                                "/api/suppliers",
+                                "/api/suppliers/**")
+                        .authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
                 .build();

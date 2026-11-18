@@ -24,8 +24,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.nextfirst.plm.auth.service.AuthAuditService;
 import com.nextfirst.plm.auth.service.AuthorizationService;
+import com.nextfirst.plm.design.dto.DesignMainAssemblyRequest;
 import com.nextfirst.plm.design.dto.DesignPartsRequest;
 import com.nextfirst.plm.design.dto.DesignPartStatusRequest;
+import com.nextfirst.plm.design.dto.DesignSubAssemblyRequest;
 import com.nextfirst.plm.design.entity.DesignMainAssembly;
 import com.nextfirst.plm.design.entity.DesignParts;
 import com.nextfirst.plm.design.entity.DesignSubAssembly;
@@ -313,9 +315,73 @@ class DesignRegisterServiceTest {
         when(mainAssemblyRepository.findByProjectIdOrderById(1L)).thenReturn(List.of());
         when(authorizationService.hasProjectPermission(authentication, 1L, "PARTS_UPDATE", "DESIGN"))
                 .thenReturn(true);
+        when(authorizationService.hasProjectPermission(authentication, 1L, "ASSEMBLY_UPDATE", "DESIGN"))
+                .thenReturn(true);
 
         var workspace = service.workspace(1L, authentication);
 
         assertTrue(workspace.permissions().canUpdateParts());
+        assertTrue(workspace.permissions().canUpdateAssemblies());
+    }
+
+    @Test
+    void updatesMainAssemblyAndRecordsAuditEvent() {
+        mainAssembly.setAssemblyNumber("A-100");
+        when(mainAssemblyRepository.save(mainAssembly)).thenReturn(mainAssembly);
+
+        var response = service.updateMainAssembly(
+                1L, 10L, new DesignMainAssemblyRequest(" A-101 ", " Frame ", " Updated "), authentication);
+
+        assertEquals("A-101", response.assemblyNumber());
+        assertEquals("Frame", response.name());
+        assertEquals("Updated", response.description());
+        verify(auditService).record("DESIGN_MAIN_ASSEMBLY_UPDATED", "DESIGN_MAIN_ASSEMBLY", 10L, "A-101");
+    }
+
+    @Test
+    void updatesSubAssemblyAndRecordsAuditEvent() {
+        subAssembly.setAssemblyNumber("S-100");
+        when(subAssemblyRepository.save(subAssembly)).thenReturn(subAssembly);
+
+        var response = service.updateSubAssembly(
+                1L, 20L, new DesignSubAssemblyRequest("S-101", "Bracket", ""), authentication);
+
+        assertEquals("S-101", response.assemblyNumber());
+        assertEquals("Bracket", response.name());
+        assertNull(response.description());
+        verify(auditService).record("DESIGN_SUB_ASSEMBLY_UPDATED", "DESIGN_SUB_ASSEMBLY", 20L, "S-101");
+    }
+
+    @Test
+    void deletesPartAndRecordsAuditEvent() {
+        DesignParts part = new DesignParts();
+        part.setPartNumber("P-100");
+        ReflectionTestUtils.setField(part, "id", 30L);
+        when(partsRepository.findByIdAndMainAssemblyProjectId(30L, 1L)).thenReturn(Optional.of(part));
+
+        service.deletePart(1L, 30L);
+
+        verify(partsRepository).delete(part);
+        verify(auditService).record("DESIGN_PART_DELETED", "DESIGN_PART", 30L, "P-100");
+    }
+
+    @Test
+    void deletesMainAssemblyAndRecordsAuditEvent() {
+        mainAssembly.setAssemblyNumber("A-100");
+
+        service.deleteMainAssembly(1L, 10L);
+
+        verify(mainAssemblyRepository).delete(mainAssembly);
+        verify(auditService).record("DESIGN_MAIN_ASSEMBLY_DELETED", "DESIGN_MAIN_ASSEMBLY", 10L, "A-100");
+    }
+
+    @Test
+    void deletesSubAssemblyAndRecordsAuditEvent() {
+        subAssembly.setAssemblyNumber("S-100");
+
+        service.deleteSubAssembly(1L, 20L);
+
+        verify(subAssemblyRepository).delete(subAssembly);
+        verify(auditService).record("DESIGN_SUB_ASSEMBLY_DELETED", "DESIGN_SUB_ASSEMBLY", 20L, "S-100");
     }
 }

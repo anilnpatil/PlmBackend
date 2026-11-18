@@ -12,8 +12,11 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 
 public record ProcurementWorkflowRequest(
+        @Positive Long supplierId,
+        @Deprecated
         @Size(max = 150) String supplierName,
         @NotNull QuotationStatus quotationStatus,
         LocalDate quotationRequestedDate,

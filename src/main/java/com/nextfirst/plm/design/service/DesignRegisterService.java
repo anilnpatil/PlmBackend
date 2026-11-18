@@ -62,7 +62,8 @@ public class DesignRegisterService {
     @Transactional(readOnly = true)
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
             + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
-            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'ASSEMBLY_UPDATE', 'DESIGN')")
     public DesignWorkspaceResponse workspace(@P("projectId") Long projectId, Authentication authentication) {
         requireProject(projectId);
         boolean canReadParts = hasPermission(authentication, projectId, "PARTS_READ");
@@ -72,6 +73,7 @@ public class DesignRegisterService {
                 .stream().map(assembly -> mainAssemblyResponse(assembly, canReadParts)).toList();
         return new DesignWorkspaceResponse(mainAssemblies, new DesignPermissions(
                 hasPermission(authentication, projectId, "ASSEMBLY_CREATE"),
+                hasPermission(authentication, projectId, "ASSEMBLY_UPDATE"),
                 hasPermission(authentication, projectId, "PARTS_CREATE"),
                 canReadParts,
                 canUpdateParts));
@@ -125,6 +127,74 @@ public class DesignRegisterService {
                 assembly.getId(), assembly.getAssemblyNumber());
         return subAssemblyResponse(
                 assembly, hasPermission(authentication, projectId, "PARTS_READ"));
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'ASSEMBLY_UPDATE', 'DESIGN')")
+    public DesignMainAssemblyResponse updateMainAssembly(
+            @P("projectId") Long projectId,
+            Long mainAssemblyId,
+            DesignMainAssemblyRequest request,
+            Authentication authentication) {
+        DesignMainAssembly assembly = requireMainAssembly(projectId, mainAssemblyId);
+        String number = request.assemblyNumber().trim();
+        if (!assembly.getAssemblyNumber().equalsIgnoreCase(number)
+                && mainAssemblyRepository.existsByProjectIdAndAssemblyNumberIgnoreCase(projectId, number)) {
+            throw new IllegalArgumentException("A main assembly with this number already exists in the project");
+        }
+        assembly.setAssemblyNumber(number);
+        assembly.setName(request.name().trim());
+        assembly.setDescription(blankToNull(request.description()));
+        assembly = mainAssemblyRepository.save(assembly);
+        auditService.record("DESIGN_MAIN_ASSEMBLY_UPDATED", "DESIGN_MAIN_ASSEMBLY",
+                assembly.getId(), assembly.getAssemblyNumber());
+        return mainAssemblyResponse(assembly, hasPermission(authentication, projectId, "PARTS_READ"));
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'ASSEMBLY_UPDATE', 'DESIGN')")
+    public DesignSubAssemblyResponse updateSubAssembly(
+            @P("projectId") Long projectId,
+            Long subAssemblyId,
+            DesignSubAssemblyRequest request,
+            Authentication authentication) {
+        DesignSubAssembly assembly = requireSubAssembly(projectId, subAssemblyId);
+        String number = request.assemblyNumber().trim();
+        if (!assembly.getAssemblyNumber().equalsIgnoreCase(number)
+                && subAssemblyRepository.existsByMainAssemblyIdAndAssemblyNumberIgnoreCase(
+                        assembly.getMainAssembly().getId(), number)) {
+            throw new IllegalArgumentException(
+                    "A subassembly with this number already exists in the main assembly");
+        }
+        assembly.setAssemblyNumber(number);
+        assembly.setName(request.name().trim());
+        assembly.setDescription(blankToNull(request.description()));
+        assembly = subAssemblyRepository.save(assembly);
+        auditService.record("DESIGN_SUB_ASSEMBLY_UPDATED", "DESIGN_SUB_ASSEMBLY",
+                assembly.getId(), assembly.getAssemblyNumber());
+        return subAssemblyResponse(assembly, hasPermission(authentication, projectId, "PARTS_READ"));
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'ASSEMBLY_UPDATE', 'DESIGN')")
+    public void deleteMainAssembly(
+            @P("projectId") Long projectId,
+            Long mainAssemblyId) {
+        DesignMainAssembly assembly = requireMainAssembly(projectId, mainAssemblyId);
+        auditService.record("DESIGN_MAIN_ASSEMBLY_DELETED", "DESIGN_MAIN_ASSEMBLY",
+                assembly.getId(), assembly.getAssemblyNumber());
+        mainAssemblyRepository.delete(assembly);
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'ASSEMBLY_UPDATE', 'DESIGN')")
+    public void deleteSubAssembly(
+            @P("projectId") Long projectId,
+            Long subAssemblyId) {
+        DesignSubAssembly assembly = requireSubAssembly(projectId, subAssemblyId);
+        auditService.record("DESIGN_SUB_ASSEMBLY_DELETED", "DESIGN_SUB_ASSEMBLY",
+                assembly.getId(), assembly.getAssemblyNumber());
+        subAssemblyRepository.delete(assembly);
     }
 
     @Transactional
@@ -222,6 +292,17 @@ public class DesignRegisterService {
         part = partsRepository.save(part);
         auditService.record("DESIGN_PART_UPDATED", "DESIGN_PART", part.getId(), part.getPartNumber());
         return partResponse(part);
+    }
+
+    @Transactional
+    @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
+    public void deletePart(
+            @P("projectId") Long projectId,
+            Long partId) {
+        DesignParts part = partsRepository.findByIdAndMainAssemblyProjectId(partId, projectId)
+                .orElseThrow(() -> new DesignResourceNotFoundException("Part", partId));
+        auditService.record("DESIGN_PART_DELETED", "DESIGN_PART", part.getId(), part.getPartNumber());
+        partsRepository.delete(part);
     }
 
     @Transactional

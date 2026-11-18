@@ -68,6 +68,7 @@ class ProcurementWorkflowValidatorTest {
             QualityStatus qualityStatus) {
         return new ProcurementWorkflowRequest(
                 null,
+                null,
                 quotationStatus,
                 quotationRequestedDate,
                 quotationReceivedDate,

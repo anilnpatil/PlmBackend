@@ -5,11 +5,13 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 import com.nextfirst.plm.sourcing.entity.ManufacturingComponentWorkflow;
 
 public interface ManufacturingComponentWorkflowRepository
         extends JpaRepository<ManufacturingComponentWorkflow, Long> {
     Optional<ManufacturingComponentWorkflow> findByDesignPartId(Long designPartId);
+    @EntityGraph(attributePaths = "supplier")
     List<ManufacturingComponentWorkflow> findByDesignPartIdIn(Collection<Long> designPartIds);
 }
