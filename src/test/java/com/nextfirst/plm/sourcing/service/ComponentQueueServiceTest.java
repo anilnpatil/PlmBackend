@@ -17,6 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.nextfirst.plm.auth.service.AuthAuditService;
 import com.nextfirst.plm.design.entity.DesignMainAssembly;
 import com.nextfirst.plm.design.entity.DesignParts;
+import com.nextfirst.plm.design.entity.DesignSubAssembly;
 import com.nextfirst.plm.design.entity.ModeOfPurchase;
 import com.nextfirst.plm.design.entity.PartStatus;
 import com.nextfirst.plm.design.repository.DesignPartsRepository;
@@ -92,9 +93,14 @@ class ComponentQueueServiceTest {
     void purchaseQueueIncludesReadyPartsWithUnspecifiedModeAndMapsPurchaseDetails() {
         DesignMainAssembly mainAssembly = new DesignMainAssembly();
         mainAssembly.setAssemblyNumber("MAIN-42");
+        mainAssembly.setName("Pump assembly");
+        DesignSubAssembly subAssembly = new DesignSubAssembly();
+        subAssembly.setAssemblyNumber("SUB-7");
+        subAssembly.setName("Bearing housing");
         DesignParts part = new DesignParts();
         ReflectionTestUtils.setField(part, "id", 101L);
         part.setMainAssembly(mainAssembly);
+        part.setSubAssembly(subAssembly);
         part.setPartNumber("P-101");
         part.setPartName("Bearing");
         part.setQuantity(new BigDecimal("2"));
@@ -122,6 +128,9 @@ class ComponentQueueServiceTest {
         assertEquals("Acme Supplies", components.get(0).supplierName());
         assertEquals(new BigDecimal("2"), components.get(0).quantity());
         assertEquals("MAIN-42", components.get(0).mainAssemblyNumber());
+        assertEquals("Pump assembly", components.get(0).mainAssemblyName());
+        assertEquals("SUB-7", components.get(0).subAssemblyNumber());
+        assertEquals("Bearing housing", components.get(0).subAssemblyName());
     }
 
     @Test

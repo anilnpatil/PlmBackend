@@ -197,24 +197,7 @@ public class AdminService {
             assignment.getAreaAccessGrants().clear();
         } else {
             assignment.getFunctionalAreas().clear();
-            assignment.getAreaAccessGrants().clear();
-            for (Map.Entry<String, String> entry : areaAccess.entrySet()) {
-                FunctionalArea area = areaRepository.findByCodeIgnoreCase(entry.getKey().trim())
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Unknown functional area code: " + entry.getKey()));
-                AreaAccessLevel accessLevel;
-                try {
-                    accessLevel = AreaAccessLevel.valueOf(entry.getValue().trim().toUpperCase(Locale.ROOT));
-                } catch (IllegalArgumentException exception) {
-                    throw new IllegalArgumentException(
-                            "Access level must be READ_ONLY or READ_WRITE for " + entry.getKey(), exception);
-                }
-                ProjectAreaAccess grant = new ProjectAreaAccess();
-                grant.setAssignment(assignment);
-                grant.setArea(area);
-                grant.setAccessLevel(accessLevel);
-                assignment.getAreaAccessGrants().add(grant);
-            }
+            updateAreaAccessGrants(assignment, areaAccess);
         }
         assignment = assignmentRepository.save(assignment);
         auditService.record(created ? "PROJECT_USER_ASSIGNED" : "PROJECT_ASSIGNMENT_UPDATED",
@@ -287,6 +270,41 @@ public class AdminService {
                 .map(code -> areaRepository.findByCodeIgnoreCase(code.trim())
                         .orElseThrow(() -> new IllegalArgumentException("Unknown functional area code: " + code)))
                 .collect(Collectors.toSet());
+    }
+
+    private void updateAreaAccessGrants(ProjectAssignment assignment, Map<String, String> areaAccess) {
+        Map<String, ProjectAreaAccess> existingGrants = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        assignment.getAreaAccessGrants().forEach(grant ->
+                existingGrants.put(grant.getArea().getCode(), grant));
+        Set<String> requestedAreas = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+        for (Map.Entry<String, String> entry : areaAccess.entrySet()) {
+            FunctionalArea area = areaRepository.findByCodeIgnoreCase(entry.getKey().trim())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Unknown functional area code: " + entry.getKey()));
+            if (!requestedAreas.add(area.getCode())) {
+                throw new IllegalArgumentException("Functional area was specified more than once: " + area.getCode());
+            }
+
+            AreaAccessLevel accessLevel;
+            try {
+                accessLevel = AreaAccessLevel.valueOf(entry.getValue().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException(
+                        "Access level must be READ_ONLY or READ_WRITE for " + entry.getKey(), exception);
+            }
+
+            ProjectAreaAccess grant = existingGrants.remove(area.getCode());
+            if (grant == null) {
+                grant = new ProjectAreaAccess();
+                grant.setAssignment(assignment);
+                grant.setArea(area);
+                assignment.getAreaAccessGrants().add(grant);
+            }
+            grant.setAccessLevel(accessLevel);
+        }
+
+        existingGrants.values().forEach(assignment.getAreaAccessGrants()::remove);
     }
 
     private AuthUser findUser(Long id) {
