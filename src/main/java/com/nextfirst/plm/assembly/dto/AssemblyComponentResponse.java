@@ -16,6 +16,7 @@ public record AssemblyComponentResponse(
         String subAssemblyName,
         String partNumber,
         String partName,
+        String filePath,
         BigDecimal quantity,
         ModeOfPurchase modeOfPurchase,
         LocalDate assemblyStartDate,

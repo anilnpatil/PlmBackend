@@ -123,6 +123,7 @@ public class AssemblyComponentsService {
                 part.getSubAssembly() == null ? null : part.getSubAssembly().getName(),
                 part.getPartNumber(),
                 part.getPartName(),
+                part.getFilePath(),
                 part.getQuantity(),
                 part.getModeOfPurchase(),
                 workflow.getAssemblyStartDate(),

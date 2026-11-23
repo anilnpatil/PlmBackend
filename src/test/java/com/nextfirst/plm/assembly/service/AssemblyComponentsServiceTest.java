@@ -49,7 +49,7 @@ class AssemblyComponentsServiceTest {
     void componentsUsesReceivedAndAvailableSourcesAndReturnsGroupedPartData() {
         AssemblyComponentResponse component = new AssemblyComponentResponse(
                 31L, 3L, "MAIN-3", "Main assembly", 4L, "SUB-4", "Sub assembly",
-                "P-31", "Bracket", new BigDecimal("2"), ModeOfPurchase.PURCHASE,
+                "P-31", "Bracket", "C:\\designs\\P-31.pdf", new BigDecimal("2"), ModeOfPurchase.PURCHASE,
                 null, null, null);
         when(workflowRepository.findEligibleComponents(
                 7L,

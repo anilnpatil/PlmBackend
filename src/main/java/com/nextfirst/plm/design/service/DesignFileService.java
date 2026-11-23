@@ -55,7 +55,10 @@ public class DesignFileService {
     @Transactional(readOnly = true)
     @PreAuthorize("@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_READ', 'DESIGN') or "
             + "@authorizationService.hasProjectPermission(authentication, #p0, 'DESIGN_READ', 'DESIGN') or "
-            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN')")
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PARTS_UPDATE', 'DESIGN') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PURCHASE_COMPONENTS_READ', 'PURCHASE') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'MANUFACTURING_COMPONENTS_READ', 'MANUFACTURING') or "
+            + "@authorizationService.hasProjectPermission(authentication, #p0, 'PROJECT_STOCK_READ', 'STOCK')")
     public Path getPartFile(
             @P("projectId") Long projectId,
             Long partId) {

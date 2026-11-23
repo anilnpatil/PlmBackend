@@ -31,6 +31,7 @@ public interface AssemblyComponentWorkflowRepository
                 sub.name,
                 part.partNumber,
                 part.partName,
+                part.filePath,
                 part.quantity,
                 part.modeOfPurchase,
                 workflow.assemblyStartDate,
